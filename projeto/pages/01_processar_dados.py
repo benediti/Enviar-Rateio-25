@@ -126,8 +126,12 @@ with st.sidebar:
         "categorias_nibo.xlsx": "Categorias"
     }
     
+    # Diretório base para procurar os arquivos
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    
     for arquivo, desc in arquivos_ref.items():
-        if os.path.exists(arquivo):
+        caminho_arquivo = os.path.join(base_dir, arquivo)
+        if os.path.exists(caminho_arquivo):
             st.success(f"✅ {desc}")
         else:
             st.error(f"❌ {desc}")
@@ -182,9 +186,12 @@ if uploaded_file is not None:
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.subheader("�️ Categoria")
-                    if os.path.exists("categorias_nibo.xlsx"):
-                        df_cat = pd.read_excel("categorias_nibo.xlsx")
+                    st.subheader("🏷️ Categoria")
+                    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    categorias_file = os.path.join(base_dir, "categorias_nibo.xlsx")
+                    
+                    if os.path.exists(categorias_file):
+                        df_cat = pd.read_excel(categorias_file)
                         categorias = df_cat.iloc[:, 0].tolist() if len(df_cat.columns) > 0 else []
                         categoria_selecionada = st.selectbox("Categoria:", categorias)
                         if categoria_selecionada and len(df_cat.columns) > 1:
@@ -216,8 +223,12 @@ if uploaded_file is not None:
                     df_stakeholders = None
                     df_cost_centers = None
                     
-                    if os.path.exists("FUNC.xlsx"):
-                        df_stakeholders = pd.read_excel("FUNC.xlsx")
+                    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    func_file = os.path.join(base_dir, "FUNC.xlsx")
+                    centros_file = os.path.join(base_dir, "centros_de_custo.xlsx")
+                    
+                    if os.path.exists(func_file):
+                        df_stakeholders = pd.read_excel(func_file)
                         if 'matricula' in df_stakeholders.columns:
                             def _norm_matricula_func(x):
                                 if pd.isna(x):
@@ -229,8 +240,8 @@ if uploaded_file is not None:
                                     return None
                             df_stakeholders['matricula'] = df_stakeholders['matricula'].apply(_norm_matricula_func)
                     
-                    if os.path.exists("centros_de_custo.xlsx"):
-                        df_cost_centers = pd.read_excel("centros_de_custo.xlsx")
+                    if os.path.exists(centros_file):
+                        df_cost_centers = pd.read_excel(centros_file)
                         df_cost_centers.columns = df_cost_centers.columns.str.lower()
                     
                     # Processar dados
