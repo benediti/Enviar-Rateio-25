@@ -48,8 +48,9 @@ def buscar_stakeholder_id(matricula, df_stakeholders):
         
         resultado = df_stakeholders[df_stakeholders['matricula'] == matricula]
         if not resultado.empty:
+            # A terceira coluna (índice 2) contém o ID do stakeholder
             if len(df_stakeholders.columns) >= 3:
-                return resultado.iloc[0, 2]
+                return resultado.iloc[0, 2]  # Coluna2 com os IDs
     return None
 
 def buscar_cost_center_id(idsetor, df_cost_centers):
@@ -192,11 +193,16 @@ if uploaded_file is not None:
                     
                     if os.path.exists(categorias_file):
                         df_cat = pd.read_excel(categorias_file)
-                        categorias = df_cat.iloc[:, 0].tolist() if len(df_cat.columns) > 0 else []
-                        categoria_selecionada = st.selectbox("Categoria:", categorias)
-                        if categoria_selecionada and len(df_cat.columns) > 1:
-                            category_id = df_cat[df_cat.iloc[:, 0] == categoria_selecionada].iloc[0, 1]
+                        # Usar as colunas corretas: 'Nome' e 'ID'
+                        if 'Nome' in df_cat.columns:
+                            categorias = df_cat['Nome'].tolist()
+                            categoria_selecionada = st.selectbox("Categoria:", categorias)
+                            if categoria_selecionada and 'ID' in df_cat.columns:
+                                category_id = df_cat[df_cat['Nome'] == categoria_selecionada]['ID'].iloc[0]
+                            else:
+                                category_id = st.text_input("Category ID:")
                         else:
+                            categoria_selecionada = st.text_input("Nome da categoria:")
                             category_id = st.text_input("Category ID:")
                     else:
                         categoria_selecionada = st.text_input("Nome da categoria:")
