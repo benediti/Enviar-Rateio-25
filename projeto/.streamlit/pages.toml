@@ -1,0 +1,14 @@
+[[pages]]
+name = "Home"
+path = "main.py"
+icon = "🏠"
+
+[[pages]]
+name = "Processar Dados"
+path = "pages/01_processar_dados.py"
+icon = "📊"
+
+[[pages]]
+name = "Gerar Coleção"
+path = "pages/02_gerar_colecao.py"
+icon = "📋"
