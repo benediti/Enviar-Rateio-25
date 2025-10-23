@@ -4,12 +4,14 @@ Este arquivo contém configurações sensíveis que não devem ser commitadas
 """
 
 import os
-from typing import Dict, Any
+import json
+from typing import Dict, Any, List, Tuple, Optional
 
 class ConfigSegura:
     """Classe para gerenciar configurações seguras"""
     
     def __init__(self):
+        self.config_file = "config_api.json"
         self.config = {
             # Configurações de banco de dados
             "DATABASE": {
@@ -80,6 +82,53 @@ class ConfigSegura:
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
+    
+    def listar_perfis(self) -> List[str]:
+        """Lista os perfis salvos de configuração da API"""
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                return list(data.keys())
+        except Exception:
+            pass
+        return []
+    
+    def carregar_config(self, perfil: str = "default") -> Tuple[Optional[str], Optional[str]]:
+        """Carrega configuração da API de um perfil específico"""
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                if perfil in data:
+                    config = data[perfil]
+                    return config.get('api_url'), config.get('api_token')
+        except Exception:
+            pass
+        return None, None
+    
+    def salvar_config(self, api_url: str, api_token: str, perfil: str = "default") -> bool:
+        """Salva configuração da API em um perfil"""
+        try:
+            data = {}
+            if os.path.exists(self.config_file):
+                try:
+                    with open(self.config_file, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                except:
+                    data = {}
+            
+            data[perfil] = {
+                'api_url': api_url,
+                'api_token': api_token
+            }
+            
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            
+            return True
+        except Exception:
+            return False
 
 # Instância global das configurações
 config = ConfigSegura()
