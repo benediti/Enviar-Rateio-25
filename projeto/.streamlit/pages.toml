@@ -1,14 +1,19 @@
 [[pages]]
-name = "Home"
 path = "main.py"
+name = "🏠 Início"
 icon = "🏠"
 
 [[pages]]
-name = "Processar Dados"
-path = "pages/01_processar_dados.py"
-icon = "📊"
+name = "📊 Processamento"
+icon = "⚙️"
+is_section = true
 
 [[pages]]
-name = "Gerar Coleção"
+path = "pages/01_processar_dados.py"
+name = "1️⃣ Processar Planilha"
+icon = "�"
+
+[[pages]]
 path = "pages/02_gerar_colecao.py"
-icon = "📋"
+name = "2️⃣ Gerar Coleção Postman"
+icon = "�"
