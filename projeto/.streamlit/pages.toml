@@ -1,4 +1,4 @@
-﻿[[pages]]
+[[pages]]
 path = "main.py"
 name = " Início"
 icon = ""
@@ -10,20 +10,20 @@ is_section = true
 
 [[pages]]
 path = "pages/01_processar_dados.py"
-name = "1 Processar Planilha"
-icon = ""
+name = "1️⃣ Processar Planilha"
+icon = "📤"
 
 [[pages]]
 path = "pages/02_gerar_colecao.py"
-name = "2 Gerar Coleção Postman"
-icon = ""
+name = "2️⃣ Gerar Coleção Postman"
+icon = "🚀"
 
 [[pages]]
-name = " Gerenciamento"
-icon = ""
+name = "🔧 Gerenciamento"
+icon = "⚙️"
 is_section = true
 
 [[pages]]
 path = "pages/03_editor_planilhas.py"
-name = " Editor de Planilhas"
-icon = ""
+name = "📝 Editor de Planilhas"
+icon = "📝"

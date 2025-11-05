@@ -151,31 +151,162 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     try:
-        # Ler arquivo
-        df_input = pd.read_excel(uploaded_file)
-        df_input.columns = df_input.columns.str.lower()
+        # Ler arquivo com configurações mais específicas
+        df_input = pd.read_excel(uploaded_file, engine='openpyxl')
+        
+        # Verificar se há múltiplas abas
+        if hasattr(uploaded_file, 'name'):
+            xls = pd.ExcelFile(uploaded_file)
+            if len(xls.sheet_names) > 1:
+                st.info(f"📋 Planilha possui {len(xls.sheet_names)} abas: {', '.join(xls.sheet_names)}")
+                aba_selecionada = st.selectbox("Selecione a aba:", xls.sheet_names)
+                df_input = pd.read_excel(uploaded_file, sheet_name=aba_selecionada, engine='openpyxl')
+        
+        # Limpar dados iniciais
+        df_input = df_input.dropna(how='all')  # Remove linhas completamente vazias
+        df_input = df_input.dropna(how='all', axis=1)  # Remove colunas completamente vazias
+        
+        # Normalizar nomes das colunas
+        df_input.columns = df_input.columns.str.lower().str.strip()
         
         st.success(f"✅ Arquivo carregado: {uploaded_file.name}")
+        st.info(f"📊 Dados reais encontrados: {len(df_input)} linhas, {len(df_input.columns)} colunas")
         
         # Verificar colunas
         required_columns = ['matricula', 'idsetor', 'valor']
         missing_columns = [col for col in required_columns if col not in df_input.columns]
         
         if missing_columns:
-            st.error(f"❌ Colunas faltando: {missing_columns}")
-        else:
-            # Preview
-            with st.expander("👁️ Visualizar dados", expanded=False):
-                st.dataframe(df_input.head(10))
+            st.error(f"❌ Colunas obrigatórias não encontradas: {missing_columns}")
+            st.info("Colunas disponíveis: " + ", ".join(df_input.columns.tolist()))
+            st.stop()
+        
+        # Limpeza automática inicial dos dados
+        registros_originais = len(df_input)
+        
+        # 1. Remove linhas completamente vazias
+        df_input = df_input.dropna(how='all')
+        
+        # 2. Remove linhas com valores obrigatórios vazios
+        df_input = df_input.dropna(subset=['matricula', 'idsetor', 'valor'])
+        
+        # 3. Remove duplicatas completas
+        df_input = df_input.drop_duplicates()
+        
+        # 4. Converte tipos e corrige formatação
+        try:
+            # Tratar matrículas como string primeiro para remover zeros desnecessários
+            df_input['matricula'] = df_input['matricula'].astype(str).str.replace(r'\.0$', '', regex=True)
             
-            # Estatísticas básicas
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("📊 Total de Registros", len(df_input))
-            with col2:
-                st.metric("💰 Valor Total", f"R$ {df_input['valor'].sum():,.2f}")
-            with col3:
-                st.metric("👥 Matrículas Únicas", df_input['matricula'].nunique())
+            # Converter para inteiro (remove zeros à direita automaticamente)
+            df_input['matricula'] = pd.to_numeric(df_input['matricula'], errors='coerce').astype('Int64')
+            df_input['idsetor'] = pd.to_numeric(df_input['idsetor'], errors='coerce').astype('Int64')
+            df_input['valor'] = pd.to_numeric(df_input['valor'], errors='coerce')
+            
+            # Remove registros onde a conversão falhou
+            df_input = df_input.dropna(subset=['matricula', 'idsetor', 'valor'])
+            
+            # Remove valores <= 0
+            df_input = df_input[
+                (df_input['matricula'] > 0) & 
+                (df_input['idsetor'] > 0) & 
+                (df_input['valor'] > 0)
+            ]
+            
+            # Converter matrículas e setores para int normal (sem zeros extras)
+            df_input['matricula'] = df_input['matricula'].astype(int)
+            df_input['idsetor'] = df_input['idsetor'].astype(int)
+            
+        except Exception as e:
+            st.error(f"❌ Erro na conversão de tipos: {e}")
+            st.stop()
+        
+        registros_limpos = len(df_input)
+        
+        if registros_limpos == 0:
+            st.error("❌ Nenhum registro válido encontrado após limpeza!")
+            st.stop()
+        
+        if registros_originais != registros_limpos:
+            st.success(f"🧹 Limpeza automática: {registros_originais - registros_limpos} registros inválidos removidos")
+        
+        # Estatísticas básicas
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("📊 Total de Registros", f"{len(df_input):,}")
+        with col2:
+            st.metric("💰 Valor Total", f"R$ {df_input['valor'].sum():,.2f}")
+        with col3:
+            st.metric("👥 Matrículas Únicas", f"{df_input['matricula'].nunique():,}")
+            
+            # Análise de dados e alertas
+            registros_vazios = df_input.isnull().all(axis=1).sum()
+            duplicatas = len(df_input) - len(df_input.drop_duplicates())
+            valores_zero = (df_input['valor'] == 0).sum()
+            
+            if registros_vazios > 0 or duplicatas > 0 or valores_zero > 0:
+                st.warning("⚠️ **Problemas detectados nos dados:**")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    if registros_vazios > 0:
+                        st.error(f"🗑️ {registros_vazios} linhas completamente vazias")
+                with col2:
+                    if duplicatas > 0:
+                        st.warning(f"� {duplicatas} registros duplicados")
+                with col3:
+                    if valores_zero > 0:
+                        st.info(f"⚪ {valores_zero} registros com valor zero")
+                
+                # Opções de limpeza
+                st.subheader("🧹 Limpeza de Dados")
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    remover_vazios = st.checkbox("Remover linhas vazias", value=True)
+                with col2:
+                    remover_duplicatas = st.checkbox("Remover duplicatas", value=True)
+                with col3:
+                    remover_zeros = st.checkbox("Remover valores zero", value=False)
+                
+                if st.button("🧹 Aplicar Limpeza", type="secondary"):
+                    df_original = df_input.copy()
+                    
+                    if remover_vazios:
+                        df_input = df_input.dropna(how='all')
+                        st.success(f"✅ Removidas {len(df_original) - len(df_input)} linhas vazias")
+                    
+                    if remover_duplicatas:
+                        df_antes = len(df_input)
+                        df_input = df_input.drop_duplicates()
+                        st.success(f"✅ Removidas {df_antes - len(df_input)} duplicatas")
+                    
+                    if remover_zeros:
+                        df_antes = len(df_input)
+                        df_input = df_input[df_input['valor'] != 0]
+                        st.success(f"✅ Removidos {df_antes - len(df_input)} registros com valor zero")
+                    
+                    st.info(f"📊 Dataset limpo: {len(df_input)} registros restantes")
+                    st.rerun()
+            
+            # Verificar se o dataset é muito grande
+            if len(df_input) > 10000:
+                st.warning(f"⚠️ **Dataset muito grande:** {len(df_input)} registros")
+                st.info("� **Recomendações:**")
+                st.markdown("""
+                - Considere processar em lotes menores
+                - Verifique se há dados duplicados desnecessários
+                - O processamento pode ser mais lento
+                """)
+                
+                processar_lotes = st.checkbox("Processar em lotes de 1000 registros", value=True)
+                if processar_lotes:
+                    st.session_state['processar_lotes'] = True
+            
+            # Preview dos dados
+            with st.expander("👁️ Visualizar dados", expanded=False):
+                st.dataframe(df_input.head(20), use_container_width=True)
+                if len(df_input) > 20:
+                    st.info(f"Mostrando as primeiras 20 linhas de {len(df_input)} registros")
             
             # ========================================
             # CONFIGURAÇÃO DOS CAMPOS
@@ -224,6 +355,20 @@ if uploaded_file is not None:
             # PROCESSAMENTO
             # ========================================
             if processar_clicked:
+                # Validação antes do processamento
+                if len(df_input) == 0:
+                    st.error("❌ Nenhum dado para processar após a limpeza!")
+                    st.stop()
+                
+                # Alerta para grandes volumes
+                if len(df_input) > 50000:
+                    st.error(f"❌ Dataset muito grande: {len(df_input)} registros")
+                    st.warning("⚠️ Por favor, reduza o dataset para menos de 50.000 registros")
+                    st.info("💡 Sugestões: remova duplicatas, valores zero ou processe em partes menores")
+                    st.stop()
+                elif len(df_input) > 10000:
+                    st.warning(f"⚠️ Processando {len(df_input)} registros - isso pode demorar...")
+                
                 with st.spinner("🔄 Processando dados..."):
                     # Carregar arquivos de referência
                     df_stakeholders = None
@@ -232,6 +377,13 @@ if uploaded_file is not None:
                     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
                     func_file = os.path.join(base_dir, "FUNC.xlsx")
                     centros_file = os.path.join(base_dir, "centros_de_custo.xlsx")
+                    
+                    # Progress bar para carregamento
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    status_text.text("📂 Carregando arquivo de funcionários...")
+                    progress_bar.progress(10)
                     
                     if os.path.exists(func_file):
                         df_stakeholders = pd.read_excel(func_file)
@@ -246,14 +398,23 @@ if uploaded_file is not None:
                                     return None
                             df_stakeholders['matricula'] = df_stakeholders['matricula'].apply(_norm_matricula_func)
                     
+                    status_text.text("🏢 Carregando centros de custo...")
+                    progress_bar.progress(20)
+                    
                     if os.path.exists(centros_file):
                         df_cost_centers = pd.read_excel(centros_file)
                         df_cost_centers.columns = df_cost_centers.columns.str.lower()
                     
                     # Processar dados
+                    status_text.text("⚙️ Processando dados do arquivo...")
+                    progress_bar.progress(30)
+                    
                     df_resultado = df_input.copy()
                     
                     # Normalizar matrícula
+                    status_text.text("🔢 Normalizando matrículas...")
+                    progress_bar.progress(40)
+                    
                     def normalizar_matricula(x):
                         if pd.isna(x):
                             return ''
@@ -270,7 +431,10 @@ if uploaded_file is not None:
                     df_resultado['matricula'] = df_resultado['matricula'].apply(normalizar_matricula)
                     df_resultado, ja_processados = verificar_ja_processado(df_resultado)
                     
-                    # Gerar campos
+                    # Gerar campos básicos
+                    status_text.text("📝 Gerando campos básicos...")
+                    progress_bar.progress(50)
+                    
                     df_resultado['id'] = [gerar_id_unico() for _ in range(len(df_resultado))]
                     df_resultado['categoryid'] = category_id
                     df_resultado['value'] = df_resultado['valor'].apply(converter_valor_americano)
@@ -280,37 +444,99 @@ if uploaded_file is not None:
                     df_resultado['description'] = description
                     df_resultado['reference'] = reference
                     
-                    # Buscar IDs
-                    df_resultado['stakeholderid'] = df_resultado['matricula'].apply(
-                        lambda x: buscar_stakeholder_id(x, df_stakeholders)
-                    )
-                    df_resultado['costcenterid'] = df_resultado['idsetor'].apply(
-                        lambda x: buscar_cost_center_id(x, df_cost_centers)
-                    )
+                    # Buscar IDs - Otimizado para grandes volumes
+                    status_text.text("🔍 Buscando Stakeholder IDs...")
+                    progress_bar.progress(60)
                     
-                    # Validar
+                    # Usar merge para melhor performance em grandes datasets
+                    if df_stakeholders is not None:
+                        # Criar mapeamento de stakeholders
+                        stakeholder_map = df_stakeholders.set_index('matricula')['Coluna2'].to_dict()
+                        df_resultado['stakeholderid'] = df_resultado['matricula'].map(stakeholder_map)
+                    else:
+                        df_resultado['stakeholderid'] = None
+                    
+                    status_text.text("🏢 Buscando Cost Center IDs...")
+                    progress_bar.progress(70)
+                    
+                    if df_cost_centers is not None:
+                        # Criar mapeamento de centros de custo
+                        cost_center_map = df_cost_centers.set_index('id empresa')['id cliente'].to_dict()
+                        df_resultado['costcenterid'] = df_resultado['idsetor'].map(cost_center_map)
+                    else:
+                        df_resultado['costcenterid'] = None
+                    
+                    # Validar resultados
+                    status_text.text("✅ Validando dados processados...")
+                    progress_bar.progress(80)
+                    
                     invalidos = df_resultado[
                         (df_resultado['stakeholderid'].isna()) | 
                         (df_resultado['costcenterid'].isna()) |
                         (df_resultado['value'] <= 0)
                     ]
                     
+                    progress_bar.progress(90)
+                    
+                    # Limpar elementos de progresso
+                    status_text.text("🎉 Processamento concluído!")
+                    progress_bar.progress(100)
+                    
+                    # Aguardar um pouco e limpar
+                    import time
+                    time.sleep(1)
+                    progress_bar.empty()
+                    status_text.empty()
+                    
                     if not invalidos.empty:
-                        st.error(f"❌ {len(invalidos)} registros inválidos encontrados!")
-                        with st.expander("Ver registros problemáticos"):
-                            invalidos_display = invalidos[['matricula', 'idsetor', 'stakeholderid', 'costcenterid', 'value']].copy()
-                            st.dataframe(invalidos_display)
+                        st.error(f"❌ {len(invalidos)} registros inválidos encontrados de {len(df_resultado)} total!")
                         
-                        if not st.checkbox("Continuar mesmo assim (ignorar inválidos)"):
-                            st.stop()
-                        else:
+                        # Análise dos problemas
+                        problemas = []
+                        stakeholders_faltando = invalidos['stakeholderid'].isna().sum()
+                        centros_faltando = invalidos['costcenterid'].isna().sum() 
+                        valores_invalidos = (invalidos['value'] <= 0).sum()
+                        
+                        if stakeholders_faltando > 0:
+                            problemas.append(f"🔍 {stakeholders_faltando} matrículas não encontradas no FUNC.xlsx")
+                        if centros_faltando > 0:
+                            problemas.append(f"🏢 {centros_faltando} setores não encontrados no centros_de_custo.xlsx")
+                        if valores_invalidos > 0:
+                            problemas.append(f"💰 {valores_invalidos} registros com valor zero ou negativo")
+                        
+                        for problema in problemas:
+                            st.warning(problema)
+                        
+                        with st.expander("👁️ Ver registros problemáticos (primeiros 100)"):
+                            invalidos_display = invalidos[['matricula', 'idsetor', 'stakeholderid', 'costcenterid', 'value']].copy()
+                            st.dataframe(invalidos_display.head(100), use_container_width=True)
+                            if len(invalidos_display) > 100:
+                                st.info(f"Mostrando os primeiros 100 de {len(invalidos_display)} registros problemáticos")
+                        
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            continuar = st.checkbox("Continuar mesmo assim (processar apenas válidos)", value=True)
+                        with col2:
+                            if st.button("📊 Baixar Registros Problemáticos"):
+                                csv = invalidos_display.to_csv(index=False)
+                                st.download_button(
+                                    label="📄 Download CSV",
+                                    data=csv,
+                                    file_name=f"registros_problematicos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                    mime="text/csv"
+                                )
+                        
+                        if continuar:
                             df_resultado = df_resultado[
                                 (~df_resultado['stakeholderid'].isna()) & 
                                 (~df_resultado['costcenterid'].isna()) &
                                 (df_resultado['value'] > 0)
                             ]
-                    
-                    st.success("✅ Dados processados com sucesso!")
+                            st.success(f"✅ Processando {len(df_resultado)} registros válidos!")
+                        else:
+                            st.stop()
+                    else:
+                        st.success("✅ Todos os dados processados com sucesso!")
                     
                     # Determinar registros para processar
                     if ja_processados > 0:
