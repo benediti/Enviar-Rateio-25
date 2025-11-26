@@ -209,16 +209,29 @@ if uploaded_file is not None:
         registros_originais = len(df_input)
         df_original_backup = df_input.copy()  # Backup para comparação
         
+        # Rastrear o que foi removido em cada etapa
+        indices_removidos_por_etapa = {
+            'vazias': set(),
+            'obrigatorios': set(),
+            'duplicatas': set(),
+            'conversao': set(),
+            'valores_invalidos': set()
+        }
+        
         # 1. Remove linhas completamente vazias
+        indices_antes = set(df_input.index)
         df_input = df_input.dropna(how='all')
+        indices_removidos_por_etapa['vazias'] = indices_antes - set(df_input.index)
         
         # 2. Remove linhas com valores obrigatórios vazios
-        df_antes_obrigatorios = df_input.copy()
+        indices_antes = set(df_input.index)
         df_input = df_input.dropna(subset=['matricula', 'idsetor', 'valor'])
+        indices_removidos_por_etapa['obrigatorios'] = indices_antes - set(df_input.index)
         
-        # 3. Remove duplicatas completas
-        df_antes_duplicatas = df_input.copy()
-        df_input = df_input.drop_duplicates()
+        # 3. Remove duplicatas completas (APENAS duplicatas exatas)
+        indices_antes = set(df_input.index)
+        df_input = df_input.drop_duplicates(subset=['matricula', 'idsetor', 'valor'], keep='first')
+        indices_removidos_por_etapa['duplicatas'] = indices_antes - set(df_input.index)
         
         # 4. Converte tipos e corrige formatação
         try:
@@ -231,16 +244,18 @@ if uploaded_file is not None:
             df_input['valor'] = pd.to_numeric(df_input['valor'], errors='coerce')
             
             # Remove registros onde a conversão falhou
-            df_antes_conversao = df_input.copy()
+            indices_antes = set(df_input.index)
             df_input = df_input.dropna(subset=['matricula', 'idsetor', 'valor'])
+            indices_removidos_por_etapa['conversao'] = indices_antes - set(df_input.index)
             
             # Remove valores <= 0
-            df_antes_valores = df_input.copy()
+            indices_antes = set(df_input.index)
             df_input = df_input[
                 (df_input['matricula'] > 0) & 
                 (df_input['idsetor'] > 0) & 
                 (df_input['valor'] > 0)
             ]
+            indices_removidos_por_etapa['valores_invalidos'] = indices_antes - set(df_input.index)
             
             # Converter matrículas e setores para int normal (sem zeros extras)
             df_input['matricula'] = df_input['matricula'].astype(int)
@@ -270,26 +285,30 @@ if uploaded_file is not None:
                     st.warning(f"**{len(df_removidos)} registros foram removidos durante a limpeza:**")
                     
                     # Categorizar os problemas
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2, col3, col4, col5 = st.columns(5)
                     
-                    # Contar tipos de problemas
-                    vazias = df_removidos[df_removidos.isna().all(axis=1)]
-                    obrigatorios_vazios = df_removidos[
-                        df_removidos['matricula'].isna() | 
-                        df_removidos['idsetor'].isna() | 
-                        df_removidos['valor'].isna()
-                    ]
-                    duplicatas_removidas = df_antes_duplicatas[~df_antes_duplicatas.index.isin(df_input.index)]
+                    # Contar tipos de problemas usando os índices rastreados
+                    qtd_vazias = len(indices_removidos_por_etapa['vazias'])
+                    qtd_obrigatorios = len(indices_removidos_por_etapa['obrigatorios'])
+                    qtd_duplicatas = len(indices_removidos_por_etapa['duplicatas'])
+                    qtd_conversao = len(indices_removidos_por_etapa['conversao'])
+                    qtd_valores_invalidos = len(indices_removidos_por_etapa['valores_invalidos'])
                     
                     with col1:
-                        if len(vazias) > 0:
-                            st.metric("🗑️ Linhas vazias", len(vazias))
+                        if qtd_vazias > 0:
+                            st.metric("🗑️ Linhas vazias", qtd_vazias)
                     with col2:
-                        if len(obrigatorios_vazios) > 0:
-                            st.metric("⚠️ Campos obrigatórios vazios", len(obrigatorios_vazios))
+                        if qtd_obrigatorios > 0:
+                            st.metric("⚠️ Campos vazios", qtd_obrigatorios)
                     with col3:
-                        if len(duplicatas_removidas) > 0:
-                            st.metric("🔁 Duplicatas", len(duplicatas_removidas))
+                        if qtd_duplicatas > 0:
+                            st.metric("🔁 Duplicatas", qtd_duplicatas)
+                    with col4:
+                        if qtd_conversao > 0:
+                            st.metric("❌ Erro conversão", qtd_conversao)
+                    with col5:
+                        if qtd_valores_invalidos > 0:
+                            st.metric("⚪ Valores ≤ 0", qtd_valores_invalidos)
                     
                     # Mostrar dados removidos em tabela
                     st.markdown("---")
@@ -303,26 +322,22 @@ if uploaded_file is not None:
                         linha = df_removidos_display.loc[idx]
                         motivo_lista = []
                         
-                        if linha.isna().all():
+                        # Verificar qual foi o motivo da remoção
+                        if idx in indices_removidos_por_etapa['vazias']:
                             motivo_lista.append("Linha vazia")
-                        else:
+                        if idx in indices_removidos_por_etapa['obrigatorios']:
                             if pd.isna(linha.get('matricula')):
                                 motivo_lista.append("Matrícula vazia")
                             if pd.isna(linha.get('idsetor')):
                                 motivo_lista.append("Setor vazio")
                             if pd.isna(linha.get('valor')):
                                 motivo_lista.append("Valor vazio")
-                            
-                            # Verificar se era duplicata
-                            if idx in duplicatas_removidas.index:
-                                motivo_lista.append("Duplicata")
-                            
-                            # Verificar valores inválidos
-                            try:
-                                if not pd.isna(linha.get('valor')) and float(linha.get('valor')) <= 0:
-                                    motivo_lista.append("Valor ≤ 0")
-                            except:
-                                pass
+                        if idx in indices_removidos_por_etapa['duplicatas']:
+                            motivo_lista.append("Duplicata")
+                        if idx in indices_removidos_por_etapa['conversao']:
+                            motivo_lista.append("Erro na conversão de tipo")
+                        if idx in indices_removidos_por_etapa['valores_invalidos']:
+                            motivo_lista.append("Valor ≤ 0")
                         
                         motivos.append(", ".join(motivo_lista) if motivo_lista else "Outro")
                     
