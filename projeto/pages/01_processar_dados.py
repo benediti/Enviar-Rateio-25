@@ -143,14 +143,38 @@ with st.sidebar:
 
 # Upload de arquivo
 st.header("📤 Upload da Planilha")
-uploaded_file = st.file_uploader(
-    "Selecione: Modelo Planilha Imprt Beneficios.xlsx",
-    type=['xlsx', 'xls'],
-    help="Arquivo deve conter: matricula, idsetor, valor"
-)
+
+# Dica sobre atualização de arquivo
+if 'df_processado' in st.session_state:
+    st.info("💡 **Dica:** Se você editou o arquivo Excel e quer reprocessar, clique em '🔄 Limpar Cache' e faça upload novamente.")
+
+col_upload, col_limpar = st.columns([3, 1])
+
+with col_upload:
+    uploaded_file = st.file_uploader(
+        "Selecione: Modelo Planilha Imprt Beneficios.xlsx",
+        type=['xlsx', 'xls'],
+        help="Arquivo deve conter: matricula, idsetor, valor",
+        key=f"file_uploader_{datetime.now().strftime('%Y%m%d')}"
+    )
+
+with col_limpar:
+    st.write("")  # Espaçamento
+    st.write("")  # Espaçamento
+    if st.button("🔄 Limpar Cache", help="Limpa o cache e recarrega os dados"):
+        st.cache_data.clear()
+        if 'df_processado' in st.session_state:
+            del st.session_state['df_processado']
+        if 'registros_novos' in st.session_state:
+            del st.session_state['registros_novos']
+        st.success("✅ Cache limpo! Faça upload do arquivo novamente.")
+        st.rerun()
 
 if uploaded_file is not None:
     try:
+        # Mostrar informações do arquivo carregado
+        st.info(f"📁 **Arquivo:** {uploaded_file.name} | **Tamanho:** {uploaded_file.size / 1024:.1f} KB | **Carregado em:** {datetime.now().strftime('%H:%M:%S')}")
+        
         # Ler arquivo com configurações mais específicas
         df_input = pd.read_excel(uploaded_file, engine='openpyxl')
         
