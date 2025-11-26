@@ -183,14 +183,17 @@ if uploaded_file is not None:
         
         # Limpeza automática inicial dos dados
         registros_originais = len(df_input)
+        df_original_backup = df_input.copy()  # Backup para comparação
         
         # 1. Remove linhas completamente vazias
         df_input = df_input.dropna(how='all')
         
         # 2. Remove linhas com valores obrigatórios vazios
+        df_antes_obrigatorios = df_input.copy()
         df_input = df_input.dropna(subset=['matricula', 'idsetor', 'valor'])
         
         # 3. Remove duplicatas completas
+        df_antes_duplicatas = df_input.copy()
         df_input = df_input.drop_duplicates()
         
         # 4. Converte tipos e corrige formatação
@@ -204,9 +207,11 @@ if uploaded_file is not None:
             df_input['valor'] = pd.to_numeric(df_input['valor'], errors='coerce')
             
             # Remove registros onde a conversão falhou
+            df_antes_conversao = df_input.copy()
             df_input = df_input.dropna(subset=['matricula', 'idsetor', 'valor'])
             
             # Remove valores <= 0
+            df_antes_valores = df_input.copy()
             df_input = df_input[
                 (df_input['matricula'] > 0) & 
                 (df_input['idsetor'] > 0) & 
@@ -222,13 +227,102 @@ if uploaded_file is not None:
             st.stop()
         
         registros_limpos = len(df_input)
+        registros_removidos = registros_originais - registros_limpos
         
         if registros_limpos == 0:
             st.error("❌ Nenhum registro válido encontrado após limpeza!")
             st.stop()
         
-        if registros_originais != registros_limpos:
-            st.success(f"🧹 Limpeza automática: {registros_originais - registros_limpos} registros inválidos removidos")
+        if registros_removidos > 0:
+            st.success(f"🧹 Limpeza automática: {registros_removidos} registros inválidos removidos")
+            
+            # Mostrar detalhes dos dados removidos
+            with st.expander(f"🔍 Ver detalhes dos {registros_removidos} registros removidos", expanded=False):
+                # Identificar quais registros foram removidos
+                indices_mantidos = df_input.index
+                df_removidos = df_original_backup[~df_original_backup.index.isin(indices_mantidos)]
+                
+                if not df_removidos.empty:
+                    st.warning(f"**{len(df_removidos)} registros foram removidos durante a limpeza:**")
+                    
+                    # Categorizar os problemas
+                    col1, col2, col3 = st.columns(3)
+                    
+                    # Contar tipos de problemas
+                    vazias = df_removidos[df_removidos.isna().all(axis=1)]
+                    obrigatorios_vazios = df_removidos[
+                        df_removidos['matricula'].isna() | 
+                        df_removidos['idsetor'].isna() | 
+                        df_removidos['valor'].isna()
+                    ]
+                    duplicatas_removidas = df_antes_duplicatas[~df_antes_duplicatas.index.isin(df_input.index)]
+                    
+                    with col1:
+                        if len(vazias) > 0:
+                            st.metric("🗑️ Linhas vazias", len(vazias))
+                    with col2:
+                        if len(obrigatorios_vazios) > 0:
+                            st.metric("⚠️ Campos obrigatórios vazios", len(obrigatorios_vazios))
+                    with col3:
+                        if len(duplicatas_removidas) > 0:
+                            st.metric("🔁 Duplicatas", len(duplicatas_removidas))
+                    
+                    # Mostrar dados removidos em tabela
+                    st.markdown("---")
+                    st.markdown("**📋 Registros removidos:**")
+                    
+                    # Adicionar coluna indicando o motivo
+                    df_removidos_display = df_removidos.copy()
+                    motivos = []
+                    
+                    for idx in df_removidos_display.index:
+                        linha = df_removidos_display.loc[idx]
+                        motivo_lista = []
+                        
+                        if linha.isna().all():
+                            motivo_lista.append("Linha vazia")
+                        else:
+                            if pd.isna(linha.get('matricula')):
+                                motivo_lista.append("Matrícula vazia")
+                            if pd.isna(linha.get('idsetor')):
+                                motivo_lista.append("Setor vazio")
+                            if pd.isna(linha.get('valor')):
+                                motivo_lista.append("Valor vazio")
+                            
+                            # Verificar se era duplicata
+                            if idx in duplicatas_removidas.index:
+                                motivo_lista.append("Duplicata")
+                            
+                            # Verificar valores inválidos
+                            try:
+                                if not pd.isna(linha.get('valor')) and float(linha.get('valor')) <= 0:
+                                    motivo_lista.append("Valor ≤ 0")
+                            except:
+                                pass
+                        
+                        motivos.append(", ".join(motivo_lista) if motivo_lista else "Outro")
+                    
+                    df_removidos_display['Motivo'] = motivos
+                    
+                    # Mostrar tabela
+                    st.dataframe(
+                        df_removidos_display,
+                        use_container_width=True,
+                        height=min(400, len(df_removidos_display) * 35 + 38)
+                    )
+                    
+                    # Opção de download
+                    st.markdown("---")
+                    csv_removidos = df_removidos_display.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Baixar registros removidos (CSV)",
+                        data=csv_removidos,
+                        file_name=f"registros_removidos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        help="Baixe um arquivo com todos os registros que foram removidos"
+                    )
+                    
+                    st.info("💡 **Dica:** Revise estes registros para corrigir os problemas no arquivo original se necessário")
         
         # Estatísticas básicas
         col1, col2, col3 = st.columns(3)
@@ -491,21 +585,42 @@ if uploaded_file is not None:
                     if not invalidos.empty:
                         st.error(f"❌ {len(invalidos)} registros inválidos encontrados de {len(df_resultado)} total!")
                         
-                        # Análise dos problemas
+                        # Análise detalhada dos problemas
                         problemas = []
                         stakeholders_faltando = invalidos['stakeholderid'].isna().sum()
                         centros_faltando = invalidos['costcenterid'].isna().sum() 
                         valores_invalidos = (invalidos['value'] <= 0).sum()
                         
                         if stakeholders_faltando > 0:
-                            problemas.append(f"🔍 {stakeholders_faltando} matrículas não encontradas no FUNC.xlsx")
+                            matriculas_problematicas = invalidos[invalidos['stakeholderid'].isna()]['matricula'].unique()
+                            st.warning(f"🔍 **{stakeholders_faltando} matrículas não encontradas no FUNC.xlsx**")
+                            with st.expander(f"📋 Ver {len(matriculas_problematicas)} matrículas problemáticas"):
+                                st.write(matriculas_problematicas.tolist())
+                                st.info("💡 **Solução:** Adicione estas matrículas no arquivo FUNC.xlsx usando o Editor de Planilhas")
+                        
                         if centros_faltando > 0:
-                            problemas.append(f"🏢 {centros_faltando} setores não encontrados no centros_de_custo.xlsx")
+                            setores_problematicos = invalidos[invalidos['costcenterid'].isna()]['idsetor'].unique()
+                            st.warning(f"🏢 **{centros_faltando} setores não encontrados no centros_de_custo.xlsx**")
+                            with st.expander(f"📋 Ver {len(setores_problematicos)} setores problemáticos"):
+                                st.write("**IDs de Setor faltando:**")
+                                for setor in setores_problematicos:
+                                    st.write(f"• **ID Empresa:** {setor}")
+                                st.info("� **Solução:** Adicione estes setores no arquivo centros_de_custo.xlsx usando o Editor de Planilhas")
+                                st.markdown("---")
+                                st.markdown("**🔧 Como adicionar no Editor:**")
+                                st.markdown("""
+                                1. Vá em "editor planilhas NOVO" no menu lateral
+                                2. Selecione "centros_de_custo.xlsx"
+                                3. Na aba "Adicionar Registro":
+                                   - Preencha o "ID Empresa" com os valores acima
+                                   - Preencha "Nome do Centro" 
+                                   - Preencha "ID Cliente" (obtido da API NIBO)
+                                4. Clique em "Adicionar Centro"
+                                5. Volte aqui e reprocesse
+                                """)
+                        
                         if valores_invalidos > 0:
                             problemas.append(f"💰 {valores_invalidos} registros com valor zero ou negativo")
-                        
-                        for problema in problemas:
-                            st.warning(problema)
                         
                         with st.expander("👁️ Ver registros problemáticos (primeiros 100)"):
                             invalidos_display = invalidos[['matricula', 'idsetor', 'stakeholderid', 'costcenterid', 'value']].copy()
