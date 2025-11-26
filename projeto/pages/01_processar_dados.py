@@ -235,13 +235,18 @@ if uploaded_file is not None:
         
         # 4. Converte tipos e corrige formatação
         try:
+            # Tratar valores primeiro (pode ter vírgula como separador decimal)
+            if df_input['valor'].dtype == 'object':
+                # Se for texto, trocar vírgula por ponto
+                df_input['valor'] = df_input['valor'].astype(str).str.replace(',', '.').str.replace(r'[^\d\.]', '', regex=True)
+            df_input['valor'] = pd.to_numeric(df_input['valor'], errors='coerce')
+            
             # Tratar matrículas como string primeiro para remover zeros desnecessários
             df_input['matricula'] = df_input['matricula'].astype(str).str.replace(r'\.0$', '', regex=True)
             
             # Converter para inteiro (remove zeros à direita automaticamente)
             df_input['matricula'] = pd.to_numeric(df_input['matricula'], errors='coerce').astype('Int64')
             df_input['idsetor'] = pd.to_numeric(df_input['idsetor'], errors='coerce').astype('Int64')
-            df_input['valor'] = pd.to_numeric(df_input['valor'], errors='coerce')
             
             # Remove registros onde a conversão falhou
             indices_antes = set(df_input.index)
