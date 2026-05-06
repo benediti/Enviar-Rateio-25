@@ -20,7 +20,7 @@ def validar_colunas_obrigatorias(df):
     """Valida se a planilha contém todas as colunas obrigatórias"""
     colunas_obrigatorias = [
         'stakeholderId', 'description', 'reference', 'date', 
-        'Vencimento', 'categoryId', 'value', 'costCenterId'
+        'Vencimento', 'data_competencia', 'categoryId', 'value', 'costCenterId'
     ]
     
     colunas_faltando = [col for col in colunas_obrigatorias if col not in df.columns]
@@ -50,12 +50,24 @@ def validar_dados(df):
         erros.append("💰 Coluna 'value' contém valores não numéricos")
     
     # Verificar datas
-    valores_nulos = df[['stakeholderId', 'description', 'date', 'Vencimento']].isnull().sum()
+    valores_nulos = df[['stakeholderId', 'description', 'date', 'Vencimento', 'data_competencia']].isnull().sum()
     for coluna, nulos in valores_nulos.items():
         if nulos > 0:
             erros.append(f"📅 {nulos} valor(es) nulo(s) na coluna '{coluna}'")
     
     return erros
+
+def formatar_data_api(valor):
+    if pd.isna(valor):
+        return ""
+
+    if isinstance(valor, (datetime, pd.Timestamp)):
+        return valor.strftime("%Y-%m-%d")
+
+    texto = str(valor).strip()
+    if texto.endswith(" 00:00:00"):
+        return texto[:10]
+    return texto
 
 def converter_planilha_para_json(df, token_api, nome_colecao):
     """Converte a planilha em formato JSON para coleção Postman"""
@@ -69,9 +81,9 @@ def converter_planilha_para_json(df, token_api, nome_colecao):
             "stakeholderId": str(row["stakeholderId"]) if pd.notna(row["stakeholderId"]) else "",
             "description": str(row["description"]) if pd.notna(row["description"]) else "",
             "reference": str(row["reference"]) if pd.notna(row["reference"]) else "",
-            "scheduleDate": str(row["date"]) if pd.notna(row["date"]) else "",
-            "dueDate": str(row["Vencimento"]) if pd.notna(row["Vencimento"]) else "",
-            "accrualDate": str(row["date"]) if pd.notna(row["date"]) else "",
+            "scheduleDate": formatar_data_api(row["date"]),
+            "dueDate": formatar_data_api(row["Vencimento"]),
+            "accrualDate": formatar_data_api(row["data_competencia"]),
             "categories": [
                 {
                     "categoryId": str(row["categoryId"]) if pd.notna(row["categoryId"]) else "",
@@ -136,9 +148,9 @@ def criar_jsons_individuais(df):
             "stakeholderId": str(row["stakeholderId"]) if pd.notna(row["stakeholderId"]) else "",
             "description": str(row["description"]) if pd.notna(row["description"]) else "",
             "reference": str(row["reference"]) if pd.notna(row["reference"]) else "",
-            "scheduleDate": str(row["date"]) if pd.notna(row["date"]) else "",
-            "dueDate": str(row["Vencimento"]) if pd.notna(row["Vencimento"]) else "",
-            "accrualDate": str(row["date"]) if pd.notna(row["date"]) else "",
+            "scheduleDate": formatar_data_api(row["date"]),
+            "dueDate": formatar_data_api(row["Vencimento"]),
+            "accrualDate": formatar_data_api(row["data_competencia"]),
             "categories": [
                 {
                     "categoryId": str(row["categoryId"]) if pd.notna(row["categoryId"]) else "",
@@ -232,9 +244,9 @@ def criar_colecao_com_runner(df, token_api, nome_colecao):
             "stakeholderId": str(row["stakeholderId"]) if pd.notna(row["stakeholderId"]) else "",
             "description": str(row["description"]) if pd.notna(row["description"]) else "",
             "reference": str(row["reference"]) if pd.notna(row["reference"]) else "",
-            "scheduleDate": str(row["date"]) if pd.notna(row["date"]) else "",
-            "dueDate": str(row["Vencimento"]) if pd.notna(row["Vencimento"]) else "",
-            "accrualDate": str(row["date"]) if pd.notna(row["date"]) else "",
+            "scheduleDate": formatar_data_api(row["date"]),
+            "dueDate": formatar_data_api(row["Vencimento"]),
+            "accrualDate": formatar_data_api(row["data_competencia"]),
             "categories": [
                 {
                     "categoryId": str(row["categoryId"]) if pd.notna(row["categoryId"]) else "",
@@ -352,7 +364,7 @@ with st.sidebar:
     st.markdown("### 📋 Colunas Esperadas:")
     colunas_esperadas = [
         'stakeholderId', 'description', 'reference', 'date', 
-        'Vencimento', 'categoryId', 'value', 'costCenterId'
+        'Vencimento', 'data_competencia', 'categoryId', 'value', 'costCenterId'
     ]
     for col in colunas_esperadas:
         st.text(f"• {col}")
