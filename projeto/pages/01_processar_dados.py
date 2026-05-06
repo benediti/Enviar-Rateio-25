@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import re
 import uuid
 from datetime import datetime
 from io import BytesIO
@@ -36,25 +37,61 @@ def converter_valor_americano(valor):
     except:
         return 0.0
 
-def buscar_stakeholder_id(matricula, df_stakeholders):
-    if df_stakeholders is not None and 'matricula' in df_stakeholders.columns:
+def normalizar_codigo_inteiro(valor):
+    if pd.isna(valor):
+        return None
+
+    if not isinstance(valor, str):
         try:
-            if isinstance(matricula, str):
-                matricula = int(matricula.replace('.', '').replace(',', '').replace(' ', ''))
-            else:
-                matricula = int(matricula)
+            numero = float(valor)
+            if numero.is_integer():
+                return int(numero)
         except:
             pass
+
+    s = str(valor).strip().replace('\xa0', '').replace(' ', '')
+    if not s:
+        return None
+
+    if re.fullmatch(r'\d+([.,]0+)?', s):
+        return int(float(s.replace(',', '.')))
+
+    if re.fullmatch(r'\d{1,3}([.,]\d{3})+', s):
+        return int(s.replace('.', '').replace(',', ''))
+
+    if re.fullmatch(r'\d{1,3}(\.\d{3})+,\d+', s):
+        numero = float(s.replace('.', '').replace(',', '.'))
+        return int(numero) if numero.is_integer() else None
+
+    apenas_digitos = re.sub(r'\D', '', s)
+    return int(apenas_digitos) if apenas_digitos else None
+
+def buscar_stakeholder_id(matricula, df_stakeholders):
+    if df_stakeholders is not None and 'matricula' in df_stakeholders.columns:
+        matricula = normalizar_codigo_inteiro(matricula)
+        if matricula is None:
+            return None
         
         resultado = df_stakeholders[df_stakeholders['matricula'] == matricula]
         if not resultado.empty:
-            # A terceira coluna (índice 2) contém o ID do stakeholder
+            colunas_id = [
+                col for col in df_stakeholders.columns
+                if str(col).strip().lower() in ['coluna2', 'stakeholderid', 'stakeholder id', 'id']
+            ]
             if len(df_stakeholders.columns) >= 3:
-                return resultado.iloc[0, 2]  # Coluna2 com os IDs
+                colunas_id.append(df_stakeholders.columns[2])
+
+            for coluna in dict.fromkeys(colunas_id):
+                valor = resultado.iloc[0][coluna]
+                if pd.notna(valor) and str(valor).strip():
+                    return valor
     return None
 
 def buscar_cost_center_id(idsetor, df_cost_centers):
     if df_cost_centers is not None and 'id empresa' in df_cost_centers.columns and 'id cliente' in df_cost_centers.columns:
+        idsetor = normalizar_codigo_inteiro(idsetor)
+        if idsetor is None:
+            return None
         resultado = df_cost_centers[df_cost_centers['id empresa'] == idsetor]
         if not resultado.empty:
             return resultado['id cliente'].iloc[0]
@@ -153,7 +190,7 @@ if uploaded_file is not None:
     try:
         # Ler arquivo
         df_input = pd.read_excel(uploaded_file)
-        df_input.columns = df_input.columns.str.lower()
+        df_input.columns = df_input.columns.astype(str).str.strip().str.lower()
         
         st.success(f"✅ Arquivo carregado: {uploaded_file.name}")
         
@@ -235,39 +272,21 @@ if uploaded_file is not None:
                     
                     if os.path.exists(func_file):
                         df_stakeholders = pd.read_excel(func_file)
+                        df_stakeholders.columns = df_stakeholders.columns.astype(str).str.strip().str.lower()
                         if 'matricula' in df_stakeholders.columns:
-                            def _norm_matricula_func(x):
-                                if pd.isna(x):
-                                    return None
-                                try:
-                                    s = str(x).replace('.', '').replace(',', '').replace(' ', '')
-                                    return int(s) if s.isdigit() else None
-                                except:
-                                    return None
-                            df_stakeholders['matricula'] = df_stakeholders['matricula'].apply(_norm_matricula_func)
+                            df_stakeholders['matricula'] = df_stakeholders['matricula'].apply(normalizar_codigo_inteiro)
+                            df_stakeholders = df_stakeholders.dropna(subset=['matricula'])
                     
                     if os.path.exists(centros_file):
                         df_cost_centers = pd.read_excel(centros_file)
-                        df_cost_centers.columns = df_cost_centers.columns.str.lower()
+                        df_cost_centers.columns = df_cost_centers.columns.astype(str).str.strip().str.lower()
+                        if 'id empresa' in df_cost_centers.columns:
+                            df_cost_centers['id empresa'] = df_cost_centers['id empresa'].apply(normalizar_codigo_inteiro)
                     
                     # Processar dados
                     df_resultado = df_input.copy()
                     
-                    # Normalizar matrícula
-                    def normalizar_matricula(x):
-                        if pd.isna(x):
-                            return ''
-                        s = str(x).strip().replace('.', '').replace(',', '').replace(' ', '')
-                        try:
-                            if s == '':
-                                return ''
-                            if s.isdigit():
-                                return int(s)
-                            return int(float(s))
-                        except:
-                            return s
-                    
-                    df_resultado['matricula'] = df_resultado['matricula'].apply(normalizar_matricula)
+                    df_resultado['matricula'] = df_resultado['matricula'].apply(normalizar_codigo_inteiro)
                     df_resultado, ja_processados = verificar_ja_processado(df_resultado)
                     
                     # Gerar campos
