@@ -104,29 +104,15 @@ if os.path.exists(caminho_planilha):
             st.markdown("### 📝 Edição Inline")
             st.info("💡 Dica: Clique duas vezes em uma célula para editá-la")
             
-            # Configurar colunas apropriadamente baseado no tipo
-            column_config = {}
-            for col in df.columns:
-                if df[col].dtype in ['int64', 'int32']:
-                    column_config[col] = st.column_config.NumberColumn(
-                        col,
-                        format="%d",
-                        min_value=0
-                    )
-                elif df[col].dtype in ['float64', 'float32']:
-                    column_config[col] = st.column_config.NumberColumn(
-                        col,
-                        format="%.2f"
-                    )
-                else:
-                    column_config[col] = st.column_config.TextColumn(col)
-            
             # Editor de dados
             df_editado = st.data_editor(
                 df,
                 use_container_width=True,
                 num_rows="dynamic",
-                column_config=column_config,
+                column_config={
+                    col: st.column_config.TextColumn(col) 
+                    for col in df.columns
+                },
                 key="editor_planilhas"
             )
             
