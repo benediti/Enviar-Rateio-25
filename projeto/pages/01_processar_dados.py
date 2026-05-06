@@ -588,9 +588,10 @@ if uploaded_file is not None:
                     
                     # Usar merge para melhor performance em grandes datasets
                     if df_stakeholders is not None:
-                        # Criar mapeamento de stakeholders
-                        stakeholder_map = df_stakeholders.set_index('matricula')['Coluna2'].to_dict()
-                        df_resultado['stakeholderid'] = df_resultado['matricula'].map(stakeholder_map)
+                        # Criar mapeamento de stakeholders usando loc em vez de set_index para evitar problemas com duplicatas
+                        df_resultado['stakeholderid'] = df_resultado['matricula'].apply(
+                            lambda mat: buscar_stakeholder_id(mat, df_stakeholders)
+                        )
                     else:
                         df_resultado['stakeholderid'] = None
                     
@@ -598,9 +599,10 @@ if uploaded_file is not None:
                     progress_bar.progress(70)
                     
                     if df_cost_centers is not None:
-                        # Criar mapeamento de centros de custo
-                        cost_center_map = df_cost_centers.set_index('id empresa')['id cliente'].to_dict()
-                        df_resultado['costcenterid'] = df_resultado['idsetor'].map(cost_center_map)
+                        # Criar mapeamento de centros de custo usando loc em vez de set_index para evitar problemas com duplicatas
+                        df_resultado['costcenterid'] = df_resultado['idsetor'].apply(
+                            lambda setor: buscar_cost_center_id(setor, df_cost_centers)
+                        )
                     else:
                         df_resultado['costcenterid'] = None
                     
