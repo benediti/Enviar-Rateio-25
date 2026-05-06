@@ -540,10 +540,14 @@ if uploaded_file is not None:
                     
                     status_text.text("🏢 Carregando centros de custo...")
                     progress_bar.progress(20)
-                    
+
                     if os.path.exists(centros_file):
                         df_cost_centers = pd.read_excel(centros_file)
                         df_cost_centers.columns = df_cost_centers.columns.str.lower()
+                        st.info(f"✅ Centros de custo carregados: {len(df_cost_centers)} registros")
+                    else:
+                        st.warning(f"⚠️ Arquivo centros_de_custo.xlsx não encontrado em: {centros_file}")
+                        df_cost_centers = None
                     
                     # Processar dados
                     status_text.text("⚙️ Processando dados do arquivo...")
@@ -643,7 +647,9 @@ if uploaded_file is not None:
                             matriculas_problematicas = invalidos[invalidos['stakeholderid'].isna()]['matricula'].unique()
                             st.warning(f"🔍 **{stakeholders_faltando} matrículas não encontradas no FUNC.xlsx**")
                             with st.expander(f"📋 Ver {len(matriculas_problematicas)} matrículas problemáticas"):
-                                st.write(matriculas_problematicas.tolist())
+                                st.write("**Matrículas não encontradas:**")
+                                for mat in sorted(matriculas_problematicas):
+                                    st.write(f"• **{mat}**")
                                 st.info("💡 **Solução:** Adicione estas matrículas no arquivo FUNC.xlsx usando o Editor de Planilhas")
                         
                         if centros_faltando > 0:
