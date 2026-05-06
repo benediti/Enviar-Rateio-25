@@ -522,11 +522,24 @@ if uploaded_file is not None:
                     progress_bar = st.progress(0)
                     status_text = st.empty()
                     
+def carregar_planilha(nome):
+                        caminhos = [
+                            os.path.join(base_dir, nome),
+                            os.path.join(base_dir, 'projeto', nome),
+                            os.path.join(os.getcwd(), nome),
+                            os.path.join(os.getcwd(), 'projeto', nome)
+                        ]
+                        for caminho in caminhos:
+                            if caminho and os.path.exists(caminho):
+                                return caminho
+                        return None
+
                     status_text.text("📂 Carregando arquivo de funcionários...")
                     progress_bar.progress(10)
                     
-                    if os.path.exists(func_file):
-                        df_stakeholders = pd.read_excel(func_file)
+                    func_path = carregar_planilha('FUNC.xlsx')
+                    if func_path:
+                        df_stakeholders = pd.read_excel(func_path)
                         if 'matricula' in df_stakeholders.columns:
                             def _norm_matricula_func(x):
                                 if pd.isna(x):
@@ -537,16 +550,21 @@ if uploaded_file is not None:
                                 except:
                                     return None
                             df_stakeholders['matricula'] = df_stakeholders['matricula'].apply(_norm_matricula_func)
+                        st.info(f"✅ FUNC.xlsx carregado de: {func_path}")
+                    else:
+                        st.warning("⚠️ Arquivo FUNC.xlsx não encontrado no diretório do app")
+                        df_stakeholders = None
                     
                     status_text.text("🏢 Carregando centros de custo...")
                     progress_bar.progress(20)
-
-                    if os.path.exists(centros_file):
-                        df_cost_centers = pd.read_excel(centros_file)
+                    
+                    centros_path = carregar_planilha('centros_de_custo.xlsx')
+                    if centros_path:
+                        df_cost_centers = pd.read_excel(centros_path)
                         df_cost_centers.columns = df_cost_centers.columns.str.lower()
-                        st.info(f"✅ Centros de custo carregados: {len(df_cost_centers)} registros")
+                        st.info(f"✅ centros_de_custo.xlsx carregado de: {centros_path}")
                     else:
-                        st.warning(f"⚠️ Arquivo centros_de_custo.xlsx não encontrado em: {centros_file}")
+                        st.warning("⚠️ Arquivo centros_de_custo.xlsx não encontrado no diretório do app")
                         df_cost_centers = None
                     
                     # Processar dados
