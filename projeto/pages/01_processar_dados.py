@@ -54,10 +54,12 @@ def buscar_stakeholder_id(matricula, df_stakeholders):
     return None
 
 def buscar_cost_center_id(idsetor, df_cost_centers):
-    if df_cost_centers is not None and 'id empresa' in df_cost_centers.columns and 'id cliente' in df_cost_centers.columns:
-        resultado = df_cost_centers[df_cost_centers['id empresa'] == idsetor]
-        if not resultado.empty:
-            return resultado['id cliente'].iloc[0]
+    if df_cost_centers is not None:
+        # As colunas são convertidas para lowercase ao carregar
+        if 'id empresa' in df_cost_centers.columns and 'id cliente' in df_cost_centers.columns:
+            resultado = df_cost_centers[df_cost_centers['id empresa'] == idsetor]
+            if not resultado.empty:
+                return resultado['id cliente'].iloc[0]
     return None
 
 def verificar_ja_processado(df):
