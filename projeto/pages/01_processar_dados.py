@@ -567,6 +567,25 @@ if uploaded_file is not None:
                             return s
                     
                     df_resultado['matricula'] = df_resultado['matricula'].apply(normalizar_matricula)
+                    
+                    # IMPORTANTE: Filtrar apenas as matrículas que existem em FUNC.xlsx
+                    if df_stakeholders is not None:
+                        matriculas_validas = set(df_stakeholders['matricula'].unique())
+                        matriculas_upload = set(df_resultado['matricula'].unique())
+                        matriculas_nao_encontradas = matriculas_upload - matriculas_validas
+                        
+                        if matriculas_nao_encontradas:
+                            st.warning(f"⚠️ {len(matriculas_nao_encontradas)} matrículas do upload NÃO existem em FUNC.xlsx e serão ignoradas")
+                            with st.expander(f"Ver {len(matriculas_nao_encontradas)} matrículas ignoradas"):
+                                st.write(sorted(matriculas_nao_encontradas))
+                            
+                            # Manter apenas as matrículas que existem
+                            df_resultado = df_resultado[df_resultado['matricula'].isin(matriculas_validas)]
+                            
+                            if len(df_resultado) == 0:
+                                st.error("❌ Nenhuma matrícula do upload foi encontrada em FUNC.xlsx!")
+                                st.stop()
+                    
                     df_resultado, ja_processados = verificar_ja_processado(df_resultado)
                     
                     # Gerar campos básicos
